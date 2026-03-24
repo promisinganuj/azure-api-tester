@@ -19,9 +19,15 @@ bash install.sh
 ```
 
 The installer will:
-1. Create a Python virtual environment and install the CLI tool
-2. Ask whether to install the **Copilot skill** (copies files to `~/.copilot/skills/`)
-3. Ask whether to install the **dependency-analysis prompt** (copies to `~/.copilot/.github/prompts/`)
+1. Install the CLI tool (uses `~/.copilot/env/.venv` if present, otherwise creates a local venv)
+2. Create a wrapper script at `~/.copilot/bin/azure-api-tester` so the command works from any terminal
+3. Ask whether to install the **Copilot skill** (copies files to `~/.copilot/skills/`)
+4. Ask whether to install the **dependency-analysis prompt** (copies to `~/.copilot/.github/prompts/`)
+
+> **Note:** Ensure `~/.copilot/bin` is in your PATH. Add to your shell profile if needed:
+> ```bash
+> export PATH="$HOME/.copilot/bin:$PATH"
+> ```
 
 ### Manual installation
 
@@ -37,6 +43,11 @@ cd utils/azure-api-tester
 python3 -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -e .
+
+# Create wrapper so the command is available globally
+mkdir -p ~/.copilot/bin
+echo '#!/usr/bin/env bash' > ~/.copilot/bin/azure-api-tester
+echo "exec \"$(pwd)/.venv/bin/azure-api-tester\" \"\\$@\"" >> ~/.copilot/bin/azure-api-tester
 ```
 
 #### 2. (Optional) Install the Copilot skill

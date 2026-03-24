@@ -27,7 +27,12 @@ Run the tool in dry-run mode to parse the documentation URL without making any A
 azure-api-tester test "<DOCS_URL>" --dry-run
 ```
 
-If `azure-api-tester` is not found in PATH:
+If `azure-api-tester` is not found in PATH, try the wrapper at `~/.copilot/bin/`:
+```bash
+~/.copilot/bin/azure-api-tester test "<DOCS_URL>" --dry-run
+```
+
+Or invoke the module directly with the venv Python:
 ```bash
 python3 -m azure_api_tester.cli test "<DOCS_URL>" --dry-run
 ```

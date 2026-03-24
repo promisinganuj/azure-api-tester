@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # install.sh — Azure API Tester installer
-# Installs the CLI tool, and optionally the Copilot skill and prompt.
+# Installs the CLI tool, creates a wrapper script, and optionally
+# installs the Copilot skill and prompt.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOL_DIR="$SCRIPT_DIR/utils/azure-api-tester"
+COPILOT_DIR="$HOME/.copilot"
+SHARED_VENV="$COPILOT_DIR/env/.venv"
+LOCAL_VENV="$TOOL_DIR/.venv"
+BIN_DIR="$COPILOT_DIR/bin"
 
 echo "=== Azure API Tester — Installer ==="
 echo ""
@@ -19,16 +24,38 @@ if ! command -v python3 &>/dev/null; then
     exit 1
 fi
 
-cd "$TOOL_DIR"
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e . --quiet
+# Prefer the shared Copilot venv if it exists; otherwise create a local one
+if [[ -f "$SHARED_VENV/bin/python" ]]; then
+    VENV_DIR="$SHARED_VENV"
+    echo "  Using shared Copilot venv: $SHARED_VENV"
+else
+    VENV_DIR="$LOCAL_VENV"
+    echo "  Creating local venv: $LOCAL_VENV"
+    python3 -m venv "$LOCAL_VENV"
+fi
 
-echo "  ✓ Virtual environment created at $TOOL_DIR/.venv"
-echo "  ✓ azure-api-tester installed"
-echo ""
-echo "  To activate the environment in future sessions:"
-echo "    source $TOOL_DIR/.venv/bin/activate"
+"$VENV_DIR/bin/pip" install -e "$TOOL_DIR" --quiet
+echo "  ✓ azure-api-tester installed into $VENV_DIR"
+
+# ---------------------------------------------------------------
+# Create wrapper script at ~/.copilot/bin/azure-api-tester
+# ---------------------------------------------------------------
+mkdir -p "$BIN_DIR"
+cat > "$BIN_DIR/azure-api-tester" << WRAPPER
+#!/usr/bin/env bash
+exec "$VENV_DIR/bin/azure-api-tester" "\$@"
+WRAPPER
+echo "  ✓ Wrapper created at $BIN_DIR/azure-api-tester"
+
+# Ensure ~/.copilot/bin is in PATH (hint for user)
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+    echo ""
+    echo "  ⚠  $BIN_DIR is not in your PATH."
+    echo "     Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+    echo ""
+    echo "       export PATH=\"\$HOME/.copilot/bin:\$PATH\""
+    echo ""
+fi
 echo ""
 
 # ---------------------------------------------------------------
@@ -36,17 +63,17 @@ echo ""
 # ---------------------------------------------------------------
 read -rp "[2/3] Install the Copilot skill? (y/N) " install_skill
 if [[ "${install_skill:-n}" =~ ^[Yy]$ ]]; then
-    mkdir -p ~/.copilot/skills/azure-api-tester/references
-    mkdir -p ~/.copilot/skills/azure-api-tester/scripts
+    mkdir -p "$COPILOT_DIR/skills/azure-api-tester/references"
+    mkdir -p "$COPILOT_DIR/skills/azure-api-tester/scripts"
 
     cp "$SCRIPT_DIR/skills/azure-api-tester/SKILL.md" \
-       ~/.copilot/skills/azure-api-tester/
+       "$COPILOT_DIR/skills/azure-api-tester/"
     cp "$SCRIPT_DIR/skills/azure-api-tester/references/dependency-rules.md" \
-       ~/.copilot/skills/azure-api-tester/references/
+       "$COPILOT_DIR/skills/azure-api-tester/references/"
     cp "$SCRIPT_DIR/skills/azure-api-tester/scripts/create-prerequisites.sh" \
-       ~/.copilot/skills/azure-api-tester/scripts/
+       "$COPILOT_DIR/skills/azure-api-tester/scripts/"
 
-    echo "  ✓ Copilot skill installed to ~/.copilot/skills/azure-api-tester/"
+    echo "  ✓ Copilot skill installed to $COPILOT_DIR/skills/azure-api-tester/"
 else
     echo "  — Skipped"
 fi
@@ -57,12 +84,12 @@ echo ""
 # ---------------------------------------------------------------
 read -rp "[3/3] Install the dependency-analysis prompt? (y/N) " install_prompt
 if [[ "${install_prompt:-n}" =~ ^[Yy]$ ]]; then
-    mkdir -p ~/.copilot/.github/prompts
+    mkdir -p "$COPILOT_DIR/.github/prompts"
 
     cp "$SCRIPT_DIR/prompts/azure-api-dependency-analysis.prompt.md" \
-       ~/.copilot/.github/prompts/
+       "$COPILOT_DIR/.github/prompts/"
 
-    echo "  ✓ Prompt installed to ~/.copilot/.github/prompts/"
+    echo "  ✓ Prompt installed to $COPILOT_DIR/.github/prompts/"
 else
     echo "  — Skipped"
 fi
@@ -73,8 +100,6 @@ echo ""
 # ---------------------------------------------------------------
 echo "=== Done ==="
 echo ""
-echo "  Next steps:"
-echo "    1. az login                    (if not already logged in)"
-echo "    2. source $TOOL_DIR/.venv/bin/activate"
-echo "    3. azure-api-tester test \"<docs-url>\" --dry-run"
+echo "  Verify:  azure-api-tester --help"
+echo "  Usage:   azure-api-tester test \"<docs-url>\" --dry-run"
 echo ""
