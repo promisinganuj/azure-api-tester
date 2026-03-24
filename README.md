@@ -1,0 +1,171 @@
+# Azure API Tester
+
+Automatically test Azure REST APIs by providing a Microsoft Learn documentation URL.
+
+Parses the API spec, cross-references the OpenAPI specification from [`Azure/azure-rest-api-specs`](https://github.com/Azure/azure-rest-api-specs), identifies parent and payload dependencies, generates a prerequisite Azure CLI setup script, and guides you through resource creation before executing API calls.
+
+## Prerequisites
+
+- Python 3.9+
+- Azure CLI (`az`) installed and authenticated (`az login`)
+- [GitHub Copilot](https://github.com/features/copilot) (optional — for the Copilot skill integration)
+
+## Installation
+
+### 1. Install the CLI tool
+
+```bash
+git clone https://github.com/promisinganuj/azure-api-tester.git
+cd azure-api-tester/utils/azure-api-tester
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -e .
+```
+
+This creates an isolated virtual environment and registers the `azure-api-tester` command in your PATH.
+
+### 2. (Optional) Install the Copilot skill
+
+If you use GitHub Copilot in VS Code and want the agent-guided workflow:
+
+```bash
+# Copy skill files into your Copilot config directory
+mkdir -p ~/.copilot/skills/azure-api-tester/references
+mkdir -p ~/.copilot/skills/azure-api-tester/scripts
+
+cp skills/azure-api-tester/SKILL.md       ~/.copilot/skills/azure-api-tester/
+cp skills/azure-api-tester/references/dependency-rules.md \
+                                          ~/.copilot/skills/azure-api-tester/references/
+cp skills/azure-api-tester/scripts/create-prerequisites.sh \
+                                          ~/.copilot/skills/azure-api-tester/scripts/
+```
+
+### 3. (Optional) Install the companion prompt
+
+```bash
+mkdir -p ~/.copilot/.github/prompts
+cp prompts/azure-api-dependency-analysis.prompt.md ~/.copilot/.github/prompts/
+```
+
+This adds an "azure-api-dependency-analysis" prompt you can invoke to analyze API prerequisites without running any tests.
+
+## Quick Start
+
+```bash
+# Login to Azure
+az login
+
+# Test an API — just provide the docs URL
+azure-api-tester test "https://learn.microsoft.com/en-us/rest/api/azureml/batch-endpoints/create-or-update?view=rest-azureml-2025-12-01&tabs=HTTP"
+
+# Dry run — generates payloads and saves them as editable JSON files
+azure-api-tester test "<docs-url>" --dry-run
+
+# Override URI parameters inline
+azure-api-tester test "<docs-url>" --param resourceGroupName=my-rg --param workspaceName=ws1
+
+# Execute all payloads without interactive picker
+azure-api-tester test "<docs-url>" -y
+
+# Enable auto-cleanup of created resources (off by default)
+azure-api-tester test "<docs-url>" --cleanup
+
+# View past test runs
+azure-api-tester history
+
+# View details of a specific run
+azure-api-tester history --run-id <id>
+```
+
+If using the Copilot skill, just say:
+```
+Test this API: https://learn.microsoft.com/en-us/rest/api/...
+```
+
+## What It Does
+
+1. **Parses** the Azure REST API docs page (extracts method, URL, params, body schema, enums, samples)
+2. **Enriches** with the OpenAPI spec from `Azure/azure-rest-api-specs` (arm-id fields, required arrays, read-only markers, enums, defaults)
+3. **Generates** up to 3 payload variants automatically:
+   - **Docs Sample** — the exact example from the documentation
+   - **Minimal** — only required fields with smart defaults (omitted if none required)
+   - **Full** — all writable fields populated with realistic values
+4. **Classifies** dependencies into 4 tiers (required → manual-only) and generates a prerequisite setup script
+5. **Saves** payloads as editable JSON files (during `--dry-run`)
+6. **Executes** selected API calls with your Azure credentials
+7. **Tracks** every request/response in JSONL logs + SQLite database
+8. **Cleans up** created resources on request (`--cleanup` flag or `autoCleanup: true` in config)
+
+## Configuration
+
+Create `~/.azure-api-tester/azure-config.yaml`:
+
+```yaml
+defaults:
+  subscriptionId: "auto"            # "auto" reads from az account show
+  resourceGroupName: "my-test-rg"
+  location: "eastus"
+
+  # User Assigned Managed Identity ARM resource IDs (for APIs that use UAMI)
+  uamiResourceIds:
+    - "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}"
+
+settings:
+  autoCleanup: false  # Set to true to auto-DELETE created resources after testing
+
+overrides:
+  workspaceName: "my-aml-workspace"
+  endpointName: "test-ep-{random}"  # {random} generates a unique suffix
+```
+
+### Identity auto-detection
+
+The tool automatically resolves identity values:
+- **tenantId** — from `az account show`
+- **principalId** — from `az ad sp show` (service principal) or `az ad signed-in-user show` (user)
+- **UAMI resource IDs** — from the `uamiResourceIds` config list
+
+Read-only fields (`provisioningState`, `scoringUri`, `swaggerUri`, etc.) are automatically excluded from generated payloads. Any URI parameter not found in the config will trigger an interactive prompt.
+
+## Logs & History
+
+- **JSONL logs**: `~/.azure-api-tester/logs/<timestamp>_<api>.jsonl`
+- **SQLite DB**: `~/.azure-api-tester/tracker.db`
+
+```bash
+azure-api-tester history
+azure-api-tester history --run-id <id>
+```
+
+## Repo Structure
+
+```
+├── utils/
+│   └── azure-api-tester/          # Python CLI package
+│       ├── setup.py               # Package setup (pip install -e .)
+│       ├── requirements.txt       # Python dependencies
+│       └── azure_api_tester/      # Source modules
+│           ├── __init__.py
+│           ├── cli.py             # Main CLI entry point (Click-based)
+│           ├── doc_parser.py      # MS Learn page scraper/parser
+│           ├── spec_enricher.py   # OpenAPI spec fetcher/enricher
+│           ├── payload_generator.py # Payload variant generator
+│           ├── config.py          # Config + interactive prompt
+│           ├── api_caller.py      # Token acquisition + HTTP calls
+│           ├── tracker.py         # JSONL + SQLite logging
+│           ├── cleanup.py         # Auto-cleanup with async polling
+│           └── identity_resolver.py # Azure identity detection
+├── skills/                        # Copilot skill definition
+│   └── azure-api-tester/
+│       ├── SKILL.md               # Skill workflow instructions
+│       ├── references/
+│       │   └── dependency-rules.md    # Tier classification rules
+│       └── scripts/
+│           └── create-prerequisites.sh # Template setup script
+└── prompts/                       # Copilot prompt
+    └── azure-api-dependency-analysis.prompt.md
+```
+
+## License
+
+MIT
