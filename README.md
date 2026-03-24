@@ -12,24 +12,36 @@ Parses the API spec, cross-references the OpenAPI specification from [`Azure/azu
 
 ## Installation
 
-### 1. Install the CLI tool
-
 ```bash
 git clone https://github.com/promisinganuj/azure-api-tester.git
-cd azure-api-tester/utils/azure-api-tester
+cd azure-api-tester
+bash install.sh
+```
+
+The installer will:
+1. Create a Python virtual environment and install the CLI tool
+2. Ask whether to install the **Copilot skill** (copies files to `~/.copilot/skills/`)
+3. Ask whether to install the **dependency-analysis prompt** (copies to `~/.copilot/.github/prompts/`)
+
+### Manual installation
+
+If you prefer to install manually, see the individual steps below.
+
+<details>
+<summary>Manual steps</summary>
+
+#### 1. Install the CLI tool
+
+```bash
+cd utils/azure-api-tester
 python3 -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-This creates an isolated virtual environment and registers the `azure-api-tester` command in your PATH.
-
-### 2. (Optional) Install the Copilot skill
-
-If you use GitHub Copilot in VS Code and want the agent-guided workflow:
+#### 2. (Optional) Install the Copilot skill
 
 ```bash
-# Copy skill files into your Copilot config directory
 mkdir -p ~/.copilot/skills/azure-api-tester/references
 mkdir -p ~/.copilot/skills/azure-api-tester/scripts
 
@@ -40,14 +52,14 @@ cp skills/azure-api-tester/scripts/create-prerequisites.sh \
                                           ~/.copilot/skills/azure-api-tester/scripts/
 ```
 
-### 3. (Optional) Install the companion prompt
+#### 3. (Optional) Install the companion prompt
 
 ```bash
 mkdir -p ~/.copilot/.github/prompts
 cp prompts/azure-api-dependency-analysis.prompt.md ~/.copilot/.github/prompts/
 ```
 
-This adds an "azure-api-dependency-analysis" prompt you can invoke to analyze API prerequisites without running any tests.
+</details>
 
 ## Quick Start
 
@@ -140,6 +152,7 @@ azure-api-tester history --run-id <id>
 ## Repo Structure
 
 ```
+├── install.sh                     # One-command installer
 ├── utils/
 │   └── azure-api-tester/          # Python CLI package
 │       ├── setup.py               # Package setup (pip install -e .)
