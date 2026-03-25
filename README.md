@@ -7,6 +7,7 @@ Parses the API spec, cross-references the OpenAPI specification from [`Azure/azu
 ## Prerequisites
 
 - Python 3.9+
+- [uv](https://docs.astral.sh/uv/) (auto-installed by `install.sh` if missing)
 - Azure CLI (`az`) installed and authenticated (`az login`)
 - [GitHub Copilot](https://github.com/features/copilot) (optional — for the Copilot skill integration)
 
@@ -19,10 +20,11 @@ bash install.sh
 ```
 
 The installer will:
-1. Install the CLI tool (uses `~/.copilot/env/.venv` if present, otherwise creates a local venv)
+1. Install [`uv`](https://docs.astral.sh/uv/) if not already available, then create a venv and install the CLI tool
 2. Create a wrapper script at `~/.copilot/bin/azure-api-tester` so the command works from any terminal
-3. Ask whether to install the **Copilot skill** (copies files to `~/.copilot/skills/`)
-4. Ask whether to install the **dependency-analysis prompt** (copies to `~/.copilot/.github/prompts/`)
+3. Create a default global configuration file at `~/.azure-api-tester/azure-config.yaml`
+4. Ask whether to install the **Copilot skill** (copies files to `~/.copilot/skills/`)
+5. Ask whether to install the **dependency-analysis prompt** (copies to `~/.copilot/.github/prompts/`)
 
 > **Note:** Ensure `~/.copilot/bin` is in your PATH. Add to your shell profile if needed:
 > ```bash
@@ -39,10 +41,12 @@ If you prefer to install manually, see the individual steps below.
 #### 1. Install the CLI tool
 
 ```bash
+# Install uv if not already available
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 cd utils/azure-api-tester
-python3 -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\activate
-pip install -e .
+uv venv .venv
+uv pip install -e . --python .venv/bin/python
 
 # Create wrapper so the command is available globally
 mkdir -p ~/.copilot/bin
@@ -50,7 +54,29 @@ echo '#!/usr/bin/env bash' > ~/.copilot/bin/azure-api-tester
 echo "exec \"$(pwd)/.venv/bin/azure-api-tester\" \"\\$@\"" >> ~/.copilot/bin/azure-api-tester
 ```
 
-#### 2. (Optional) Install the Copilot skill
+#### 2. Create default configuration file
+
+```bash
+mkdir -p ~/.azure-api-tester
+cat > ~/.azure-api-tester/azure-config.yaml << 'EOF'
+defaults:
+  subscriptionId: "auto"
+  resourceGroupName: "rg-azure-api-tester"
+  location: "eastus"
+
+  uamiResourceIds:
+    - "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}"
+
+settings:
+  autoCleanup: false
+
+overrides:
+  workspaceName: "my-aml-workspace"
+  endpointName: "test-ep-{random}"
+EOF
+```
+
+#### 3. (Optional) Install the Copilot skill
 
 ```bash
 mkdir -p ~/.copilot/skills/azure-api-tester/references
@@ -63,7 +89,7 @@ cp skills/azure-api-tester/scripts/create-prerequisites.sh \
                                           ~/.copilot/skills/azure-api-tester/scripts/
 ```
 
-#### 3. (Optional) Install the companion prompt
+#### 4. (Optional) Install the companion prompt
 
 ```bash
 mkdir -p ~/.copilot/.github/prompts
@@ -121,7 +147,9 @@ Test this API: https://learn.microsoft.com/en-us/rest/api/...
 
 ## Configuration
 
-Create `~/.azure-api-tester/azure-config.yaml`:
+The installer creates a default configuration file at `~/.azure-api-tester/azure-config.yaml`. This file acts as the **global configuration** — if you have stable deployed resources (e.g., a resource group, workspace, or managed identity), add them here so they are automatically referenced during API execution.
+
+You can edit the file at any time:
 
 ```yaml
 defaults:
